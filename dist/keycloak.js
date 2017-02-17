@@ -33,6 +33,10 @@
             interval: 5
         };
 
+        function isElectron() {
+            return window.process && window.process.versions && (window.process.versions.electron !== undefined);
+        }
+
         kc.init = function (initOptions) {
             kc.authenticated = false;
             var forceDefaultAdapter = false;
@@ -43,6 +47,8 @@
  
             if (window.Cordova && forceDefaultAdapter === false) {
                 adapter = loadAdapter('cordova');
+            } else if (isElectron()) {
+              adapter = loadAdapter('electron');
             } else {
                 adapter = loadAdapter();
             }
@@ -872,7 +878,7 @@
                 };
             }
 
-            if (type == 'cordova') {
+            if (type === 'cordova' || type === 'electron') {
                 loginIframe.enable = false;
 
                 return {
@@ -887,30 +893,48 @@
                         var loginUrl = kc.createLoginUrl(options);
                         var ref = window.open(loginUrl, '_blank', o);
 
-                        var completed = false;
-
-                        ref.addEventListener('loadstart', function(event) {
-                            if (event.url.indexOf('http://localhost') == 0) {
-                                var callback = parseCallback(event.url);
-                                processCallback(callback, promise);
-                                ref.close();
-                                completed = true;
+                        if (type === 'electron') {
+                          function checkLogin() {
+                            if (ref.location && ref.location.indexOf('code=') > 0) {
+                              var callback = parseCallback(ref.location);
+                              processCallback(callback, promise);
+                              ref.close();
+                            } else if (ref.location && ref.location.indexOf('login_required') > 0 &&
+                                ref.location.indexOf('prompt=none') > 0) {
+                              ref.close();
+                              promise.setSuccess();
+                            } else {
+                              setTimeout(checkLogin, 10);
                             }
-                        });
-
-                        ref.addEventListener('loaderror', function(event) {
-                            if (!completed) {
+                          }
+                          checkLogin();
+                        } else {
+                          var completed = false;
+                            ref.addEventListener('loadstart', function(event) {
+                                console.log('load start listener');
+                                console.log('url: ' + event.url);
                                 if (event.url.indexOf('http://localhost') == 0) {
                                     var callback = parseCallback(event.url);
                                     processCallback(callback, promise);
                                     ref.close();
                                     completed = true;
-                                } else {
-                                    promise.setError();
-                                    ref.close();
                                 }
-                            }
-                        });
+                            });
+
+                            ref.addEventListener('loaderror', function(event) {
+                                if (!completed) {
+                                    if (event.url.indexOf('http://localhost') == 0) {
+                                        var callback = parseCallback(event.url);
+                                        processCallback(callback, promise);
+                                        ref.close();
+                                        completed = true;
+                                    } else {
+                                        promise.setError();
+                                        ref.close();
+                                    }
+                                }
+                            });
+                        }
 
                         return promise.promise;
                     },
