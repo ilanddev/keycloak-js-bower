@@ -789,15 +789,17 @@
                 if (event.origin !== loginIframe.iframeOrigin) {
                     return;
                 }
-                var data = JSON.parse(event.data);
-                var promise = loginIframe.callbackMap[data.callbackId];
-                delete loginIframe.callbackMap[data.callbackId];
+                if (!event.data.sender) {
+                    var data = JSON.parse(event.data);
+                    var promise = loginIframe.callbackMap[data.callbackId];
+                    delete loginIframe.callbackMap[data.callbackId];
 
-                if ((!kc.sessionId || kc.sessionId == data.session) && data.loggedIn) {
-                    promise.setSuccess();
-                } else {
-                    kc.clearToken();
-                    promise.setError();
+                    if ((!kc.sessionId || kc.sessionId == data.session) && data.loggedIn) {
+                        promise.setSuccess();
+                    } else {
+                        kc.clearToken();
+                        promise.setError();
+                    }
                 }
             };
             window.addEventListener('message', messageCallback, false);
